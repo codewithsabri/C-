@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using userProject.Data;
 using userProject.Models;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Cryptography;
+using System.Text;
+using userProject.Models; // Add this line to import the 'User' class
 
 namespace userProject.Controllers
 {
@@ -24,42 +28,77 @@ namespace userProject.Controllers
             return await _context.Users.ToListAsync();
         }
 
-        [HttpPost]
-        public async Task<ActionResult<UserViewModel>> PostUser(UserViewModel user)
+        [HttpPost("CreateUser")]
+        public async Task<ActionResult<UserViewModel>> CreateUser(UserViewModel model)
         {
+            // Check if the username already exists
+            var existingUser = await _context.Users.SingleOrDefaultAsync(u => u.Username == model.Username);
+            if (existingUser != null)
+            {
+                return BadRequest("Username already exists");
+            }
+
+            // Check if the email already exists
+            var existingEmail = await _context.Users.SingleOrDefaultAsync(u => u.Email == model.Email);
+            if (existingEmail != null)
+            {
+                return BadRequest("Email already exists");
+            }
+
+            // Hash the password
+            string passwordHash = BCrypt.Net.BCrypt.HashPassword(model.Password);
+
+            var user = new UserViewModel
+            {
+                Username = model.Username,
+                Password = passwordHash,
+                Email = model.Email, // Make sure to set the Email field
+                FirstName = model.FirstName, // Make sure to set the FirstName field
+                LastName = model.LastName // Make sure to set the LastName field
+            };
+
+            // Save the user to the database
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> PutUser(int id, UserViewModel user)
+        [HttpPost]
+        [Authorize]
+        public async Task<ActionResult<UserViewModel>> PostUser(UserViewModel model)
         {
-            // Set the Id of the user object to the id from the URL parameter
-            user.Id = id;
-
-            _context.Entry(user).State = EntityState.Modified;
-
-            try
+            // Check if the username already exists
+            var existingUser = await _context.Users.SingleOrDefaultAsync(u => u.Username == model.Username);
+            if (existingUser != null)
             {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!UserExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return BadRequest("Username already exists");
             }
 
-            return NoContent();
+            // Check if the email already exists
+            var existingEmail = await _context.Users.SingleOrDefaultAsync(u => u.Email == model.Email);
+            if (existingEmail != null)
+            {
+                return BadRequest("Email already exists");
+            }
+
+            // Hash the password
+            using var hmac = new HMACSHA512();
+            var passwordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(model.Password));
+
+            var user = new UserViewModel
+            {
+                Username = model.Username,
+                Password = BitConverter.ToString(passwordHash).Replace("-", "").ToLower(),
+                Email = model.Email, // Make sure to set the Email field
+                FirstName = model.FirstName, // Make sure to set the FirstName field
+                LastName = model.LastName // Make sure to set the LastName field
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(int id)
         {

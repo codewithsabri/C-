@@ -10,5 +10,12 @@ namespace userProject.Data
         }
 
         public DbSet<UserViewModel> Users { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<UserViewModel>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+        }
     }
 }
